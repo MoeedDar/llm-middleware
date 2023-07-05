@@ -20,7 +20,7 @@ func auth(token string) (string, bool) {
 	if !ok || !t.Valid {
 		return "", false
 	}
-	md, ok := claims["user_metadata"].(map[string]any)
+	md, ok := claims["app_metadata"].(map[string]any)
 	if !ok {
 		return "", false
 	}
