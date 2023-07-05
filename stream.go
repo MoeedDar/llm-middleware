@@ -14,7 +14,7 @@ const timeout = 10 * time.Second
 
 var llmHost = os.Getenv("LLM_HOST")
 var connections = sync.Map{}
-var nl = newNLock(4)
+var nl = newNLock(1)
 
 func stream(c *ws.Conn) {
 	msg := struct {
