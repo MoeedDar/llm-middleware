@@ -28,7 +28,7 @@ func auth(token string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	sub, ok := md["sub"].(string)
+	sub, ok := claims["sub"].(string)
 	if !ok {
 		return "", false
 	}
