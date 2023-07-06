@@ -69,45 +69,39 @@ func stream(c *ws.Conn) {
 	}
 
 	wmu := sync.Mutex{}
-
-	msgChan := make(chan map[string]interface{}, 100)
-	quit := make(chan struct{})
-
-	defer func() {
-		close(quit)
-	}()
+	msgChan := make(chan map[string]any, 100)
 
 	go func() {
+		defer close(msgChan)
+	loop:
 		for {
+			msg := map[string]any{}
+			if err := llmConn.ReadJSON(&msg); err != nil {
+				wmu.Lock()
+				logBroadcastError(c, "failed to retrieve token from LLM", err)
+				wmu.Unlock()
+				break
+			}
+
 			select {
-			case <-quit:
-				return
+			case msgChan <- msg:
 			default:
-				msg := map[string]interface{}{}
-				if err := llmConn.ReadJSON(&msg); err != nil {
-					wmu.Lock()
-					logBroadcastError(c, "failed to retrieve token from LLM", err)
-					wmu.Unlock()
-				}
-				msgChan <- msg
-				if msg["event"] == "stream_end" {
-					return
-				}
+				break loop
+			}
+
+			if msg["event"] == "stream_end" {
+				break loop
 			}
 		}
 	}()
 
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		for {
-			select {
-			case <-quit:
-				return
-			default:
-				_, _, err := c.ReadMessage()
-				if err != nil {
-					msgChan <- map[string]interface{}{"event": "error", "message": err.Error()}
-					return
-				}
+			_, _, err := c.ReadMessage()
+			if err != nil {
+				done <- struct{}{}
 			}
 		}
 	}()
@@ -131,6 +125,8 @@ loop:
 			}
 		case <-time.After(timeout):
 			logBroadcastError(c, "timeout reached, no response from LLM", nil)
+			break loop
+		case <-done:
 			break loop
 		}
 	}
