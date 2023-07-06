@@ -73,24 +73,23 @@ func stream(c *ws.Conn) {
 
 	go func() {
 		defer close(msgChan)
-	loop:
 		for {
 			msg := map[string]any{}
 			if err := llmConn.ReadJSON(&msg); err != nil {
 				wmu.Lock()
 				logBroadcastError(c, "failed to retrieve token from LLM", err)
 				wmu.Unlock()
-				break
+				return
 			}
 
 			select {
 			case msgChan <- msg:
 			default:
-				break loop
+				return
 			}
 
 			if msg["event"] == "stream_end" {
-				break loop
+				return
 			}
 		}
 	}()
@@ -111,28 +110,27 @@ func stream(c *ws.Conn) {
 		}
 	}()
 
-loop:
 	for {
 		select {
 		case msg, ok := <-msgChan:
 			if !ok {
-				break
+				return
 			}
 			wmu.Lock()
 			err := c.WriteJSON(msg)
 			if err != nil {
 				logBroadcastError(c, "failed to forward message to client", err)
-				break loop
+				return
 			}
 			wmu.Unlock()
 			if msg["event"] == "stream_end" {
-				break loop
+				return
 			}
 		case <-time.After(timeout):
 			logBroadcastError(c, "timeout reached, no response from LLM", nil)
-			break loop
+			return
 		case <-done:
-			break loop
+			return
 		}
 	}
 }
