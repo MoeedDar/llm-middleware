@@ -42,10 +42,11 @@ func stream(c *ws.Conn) {
 		return
 	}
 
-	connections.Store(sub, struct{}{})
 	nl.lock()
-	defer connections.Delete(sub)
 	defer nl.unlock()
+
+	connections.Store(sub, struct{}{})
+	defer connections.Delete(sub)
 
 	llmConn, _, err := websocket.DefaultDialer.Dial(llmHost, nil)
 	if err != nil {
