@@ -30,6 +30,18 @@ func stream(c *ws.Conn) {
 		return
 	}
 
+	// No fucking idea why this works
+	closeSign := make(chan struct{})
+	go func() {
+		defer close(closeSign)
+		for {
+			_, _, err := c.ReadMessage()
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	log.Info().Interface("message", msg).Str("ip", c.RemoteAddr().String()).Msg("successfully recieved message from client")
 
 	token := msg.Token
