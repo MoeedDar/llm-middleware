@@ -21,11 +21,8 @@ func stream(c *ws.Conn) {
 		Token  string `json:"token"`
 		Prompt string `json:"prompt"`
 	}{}
-	err := c.ReadJSON(&msg)
-	if err != nil {
-		errMsg := "failed to parse message from client"
-		log.Err(err).Msg(errMsg)
-		c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
+	if err := c.ReadJSON(&msg); err != nil {
+		logBroadcastError(c, "failed to parse message from client", err)
 		c.Close()
 		return
 	}
@@ -35,18 +32,13 @@ func stream(c *ws.Conn) {
 	token := msg.Token
 	sub, auth := auth(token)
 	if !auth {
-		errMsg := "unauthorised access token"
-		log.Error().Msg(errMsg)
-		c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
+		logBroadcastError(c, "unauthorised access token", nil)
 		c.Close()
 		return
 	}
 	prompt := msg.Prompt
 	if _, ok := connections.Load(sub); ok {
-		errMsg := "you can only access the LLM once at a given time"
-		log.Error().Msg(errMsg)
-		c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
-		c.Close()
+		logBroadcastError(c, "you can only access the LLM once at a given time", nil)
 		return
 	}
 
@@ -57,16 +49,12 @@ func stream(c *ws.Conn) {
 
 	llmConn, _, err := websocket.DefaultDialer.Dial(llmHost, nil)
 	if err != nil {
-		errMsg := "failed to establish connection wtih LLM"
-		log.Err(err).Msg(errMsg)
-		c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
-		c.Close()
+		logBroadcastError(c, "failed to establish connection wtih LLM", err)
 		return
 	}
 
 	defer func() {
-		err := llmConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
+		if err := llmConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
 			log.Err(err).Msg("failed to send close message to LLM")
 		}
 		llmConn.Close()
@@ -74,40 +62,50 @@ func stream(c *ws.Conn) {
 	}()
 
 	if err := llmConn.WriteMessage(websocket.TextMessage, []byte(prompt)); err != nil {
-		errMsg := "failed to deliver prompt to LLM"
-		log.Err(err).Msg(errMsg)
-		c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
+		logBroadcastError(c, "failed to deliver prompt to LLM", err)
 		return
 	}
 
 	wmu := sync.Mutex{}
 
-	msgChan := make(chan map[string]any, 100)
+	msgChan := make(chan map[string]interface{}, 100)
+	quit := make(chan struct{})
+
+	defer func() {
+		close(quit)
+	}()
+
 	go func() {
-		defer close(msgChan)
 		for {
-			msg := map[string]any{}
-			err := llmConn.ReadJSON(&msg)
-			if err != nil {
-				errMsg := "failed to retrieve token from LLM"
-				log.Err(err).Msg(errMsg)
-				wmu.Lock()
-				c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
-				wmu.Unlock()
-			}
-			msgChan <- msg
-			if msg["event"] == "stream_end" {
+			select {
+			case <-quit:
 				return
+			default:
+				msg := map[string]interface{}{}
+				if err := llmConn.ReadJSON(&msg); err != nil {
+					wmu.Lock()
+					logBroadcastError(c, "failed to retrieve token from LLM", err)
+					wmu.Unlock()
+				}
+				msgChan <- msg
+				if msg["event"] == "stream_end" {
+					return
+				}
 			}
 		}
 	}()
 
 	go func() {
 		for {
-			_, _, err := c.ReadMessage()
-			if err != nil {
-				msgChan <- map[string]any{"event": "error", "message": err.Error()}
+			select {
+			case <-quit:
 				return
+			default:
+				_, _, err := c.ReadMessage()
+				if err != nil {
+					msgChan <- map[string]interface{}{"event": "error", "message": err.Error()}
+					return
+				}
 			}
 		}
 	}()
@@ -122,9 +120,7 @@ loop:
 			wmu.Lock()
 			err := c.WriteJSON(msg)
 			if err != nil {
-				errMsg := "failed to forward message to client"
-				log.Err(err).Msg(errMsg)
-				c.WriteJSON(map[string]any{"event": "error", "message": errMsg})
+				logBroadcastError(c, "failed to forward message to client", err)
 				break loop
 			}
 			wmu.Unlock()
@@ -132,9 +128,7 @@ loop:
 				break loop
 			}
 		case <-time.After(timeout):
-			err := "timeout reached, no response from LLM"
-			log.Error().Msg(err)
-			c.WriteJSON(map[string]any{"event": "error", "message": err})
+			logBroadcastError(c, "timeout reached, no response from LLM", nil)
 			break loop
 		}
 	}
