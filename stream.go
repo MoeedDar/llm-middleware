@@ -96,8 +96,8 @@ func stream(c *ws.Conn) {
 	}()
 
 	done := make(chan struct{})
-	defer close(done)
 	go func() {
+		defer close(done)
 		for {
 			_, _, err := c.ReadMessage()
 			if err != nil {
