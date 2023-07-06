@@ -42,8 +42,23 @@ func stream(c *ws.Conn) {
 		return
 	}
 
+	done := make(chan struct{})
+	defer close(done)
 	nl.lock()
-	defer nl.unlock()
+	go func() {
+		defer nl.unlock()
+		for {
+			_, _, err := c.ReadMessage()
+			if err != nil {
+				select {
+				case done <- struct{}{}:
+				default:
+					return
+				}
+				return
+			}
+		}
+	}()
 
 	connections.Store(sub, struct{}{})
 	defer connections.Delete(sub)
@@ -89,22 +104,6 @@ func stream(c *ws.Conn) {
 			}
 
 			if msg["event"] == "stream_end" {
-				return
-			}
-		}
-	}()
-
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for {
-			_, _, err := c.ReadMessage()
-			if err != nil {
-				select {
-				case done <- struct{}{}:
-				default:
-					return
-				}
 				return
 			}
 		}
