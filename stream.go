@@ -30,18 +30,6 @@ func stream(c *ws.Conn) {
 		return
 	}
 
-	// No fucking idea why this works
-	closeSign := make(chan struct{})
-	go func() {
-		defer close(closeSign)
-		for {
-			_, _, err := c.ReadMessage()
-			if err != nil {
-				return
-			}
-		}
-	}()
-
 	log.Info().Interface("message", msg).Str("ip", c.RemoteAddr().String()).Msg("successfully recieved message from client")
 
 	token := msg.Token
@@ -61,10 +49,10 @@ func stream(c *ws.Conn) {
 		c.Close()
 		return
 	}
-	connections.Store(sub, struct{}{})
-	defer connections.Delete(sub)
 
+	connections.Store(sub, struct{}{})
 	nl.lock()
+	defer connections.Delete(sub)
 	defer nl.unlock()
 
 	llmConn, _, err := websocket.DefaultDialer.Dial(llmHost, nil)
@@ -98,9 +86,6 @@ func stream(c *ws.Conn) {
 	go func() {
 		defer close(msgChan)
 		for {
-			if c == nil || llmConn == nil {
-				return
-			}
 			msg := map[string]any{}
 			err := llmConn.ReadJSON(&msg)
 			if err != nil {
@@ -112,6 +97,16 @@ func stream(c *ws.Conn) {
 			}
 			msgChan <- msg
 			if msg["event"] == "stream_end" {
+				return
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			_, _, err := c.ReadMessage()
+			if err != nil {
+				msgChan <- map[string]any{"event": "error", "message": err.Error()}
 				return
 			}
 		}
