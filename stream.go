@@ -54,6 +54,7 @@ func stream(c *ws.Conn) {
 	}
 
 	defer func() {
+		log.Info().Str("ip", c.RemoteAddr().String()).Msg("successful clean up")
 		if err := llmConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
 			log.Err(err).Msg("failed to send close message to LLM")
 		}
