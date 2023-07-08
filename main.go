@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/gofiber/contrib/websocket"
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	app := fiber.New()
-	app.Get("/stream", websocket.New(stream))
-	app.Listen(":8080")
+	http.HandleFunc("/generate", authMiddleware(handleGenerate))
+	log.Info().Msg("Listening on http://localhost:8080/")
+	log.Fatal().Err(http.ListenAndServe(":8080", nil))
 }

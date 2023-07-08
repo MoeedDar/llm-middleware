@@ -1,13 +1,32 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
+	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var secret = os.Getenv("JWT_SECRET")
+type contextKey string
+
+const (
+	contextSubKey contextKey = "sub"
+)
+
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		sub, auth := auth(token)
+		if !auth {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), contextSubKey, sub)
+		next(w, r.WithContext(ctx))
+	}
+}
 
 func auth(token string) (string, bool) {
 	t, _ := jwt.Parse(token, func(t *jwt.Token) (any, error) {
