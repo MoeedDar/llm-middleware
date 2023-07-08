@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var q = newQueue(maxConcurrent)
@@ -25,7 +23,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	id := uuid.New().String() // r.Context().Value("sub").(string)
+	id := r.Context().Value("sub").(string)
 	done := r.Context().Done()
 
 	if !q.wait(id, done) {
