@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const eofError = "EOF"
+
 var q = newQueue(maxConcurrent)
 
 type promptRequest struct {
@@ -15,6 +17,12 @@ type promptRequest struct {
 }
 
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
 	var p promptRequest
 	err := json.NewDecoder(r.Body).Decode(&p)
 	if err != nil {
@@ -23,8 +31,12 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	id := r.Context().Value("sub").(string)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
 	done := r.Context().Done()
+	id := r.Context().Value(contextSubKey).(string)
 
 	if !q.wait(id, done) {
 		http.Error(w, "Can only access LLM once at a time", http.StatusConflict)
@@ -41,21 +53,17 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go generate(resp, tokens, done, errCh)
+	go generate(resp, tokens, r.Context().Done(), errCh)
 
 	for {
 		select {
-		case <-done:
-			return
 		case token := <-tokens:
 			fmt.Fprint(w, token)
-			if flusher, ok := w.(http.Flusher); ok {
-				flusher.Flush()
-			}
+			flusher.Flush()
 		case err := <-errCh:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		default:
+		case <-done:
 			return
 		}
 	}
@@ -71,6 +79,7 @@ func generate(resp *http.Response, tokens chan<- string, done <-chan struct{}, e
 			return
 		case <-time.After(llmTimeout):
 			errCh <- fmt.Errorf("LLM timed out after %v", llmTimeout)
+			return
 		default:
 			data := make([]byte, 1024)
 			_, err := resp.Body.Read(data)
@@ -79,7 +88,12 @@ func generate(resp *http.Response, tokens chan<- string, done <-chan struct{}, e
 				errCh <- fmt.Errorf("Failed to retrieve token from LLM")
 				return
 			}
-			tokens <- string(data)
+			select {
+			case tokens <- string(data):
+				break
+			default:
+				return
+			}
 		}
 	}
 }
@@ -99,12 +113,10 @@ func prompt(p promptRequest) (*http.Response, error) {
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Connection", "keep-alive")
 
-	client := &http.Client{
-		Timeout: llmTimeout,
-	}
+	client := &http.Client{}
 
 	resp, err := client.Do(req)
-	if err != nil {
+	if err != nil && err.Error() != eofError {
 		return nil, err
 	}
 

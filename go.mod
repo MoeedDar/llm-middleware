@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.0.0
-	github.com/google/uuid v1.3.0
 	github.com/rs/zerolog v1.29.1
 )
 

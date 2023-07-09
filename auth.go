@@ -22,19 +22,21 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
 		ctx := context.WithValue(r.Context(), contextSubKey, sub)
 		next(w, r.WithContext(ctx))
 	}
 }
 
 func auth(token string) (string, bool) {
-	t, _ := jwt.Parse(token, func(t *jwt.Token) (any, error) {
+	t, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return []byte(secret), nil
 	})
+	if err != nil || !t.Valid {
+		return "", false
+	}
 	claims, ok := t.Claims.(jwt.MapClaims)
 	if !ok || !t.Valid {
 		return "", false

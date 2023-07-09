@@ -7,7 +7,7 @@ import (
 
 const (
 	maxConcurrent = 1
-	llmTimeout    = 5 * time.Second
+	llmTimeout    = 10 * time.Second
 )
 
 var (
