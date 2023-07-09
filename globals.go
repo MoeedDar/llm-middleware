@@ -11,6 +11,7 @@ const (
 )
 
 var (
-	llmHost = os.Getenv("LLM_HOST")
-	secret  = os.Getenv("JWT_SECRET")
+	llmHost     = os.Getenv("LLM_HOST")
+	secret      = os.Getenv("JWT_SECRET")
+	allowOrigin = os.Getenv("ALLOW_ORIGIN")
 )
