@@ -14,7 +14,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, err := http.NewRequest("POST", llmHost, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", "https://llm-middleware.fly.dev/generate", bytes.NewBuffer(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,6 @@ func TestGenerate(t *testing.T) {
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Authorization", "")
 
 	client := &http.Client{}
 

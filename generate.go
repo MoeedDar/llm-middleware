@@ -17,7 +17,9 @@ type promptRequest struct {
 }
 
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -32,10 +34,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
-
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
-	}
 
 	done := r.Context().Done()
 	id := r.Context().Value(contextSubKey).(string)
