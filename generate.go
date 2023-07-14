@@ -64,7 +64,9 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, token)
 			flusher.Flush()
 		case err := <-errCh:
-			logWriteErr(w, requestId, err, err.Error(), http.StatusInternalServerError)
+			if err != nil {
+				logWriteErr(w, requestId, err, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		case <-done:
 			fmt.Println("done")
