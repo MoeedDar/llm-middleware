@@ -12,7 +12,7 @@ const (
 
 var (
 	llmHost            = os.Getenv("LLM_HOST")
-	secret             = os.Getenv("JWT_SECRET")
+	jwtSecret          = os.Getenv("JWT_SECRET")
 	maxConcurrent uint = 1
 )
 

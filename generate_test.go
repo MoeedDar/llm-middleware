@@ -14,7 +14,7 @@ func TestGenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, err := http.NewRequest("POST", "https://llm-middleware.fly.dev/generate", bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", "http://localhost:8080/generate", bytes.NewBuffer(data))
 	if err != nil {
 		t.Fatal(err)
 	}

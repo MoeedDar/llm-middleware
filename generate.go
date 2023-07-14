@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const eofError = "EOF"
-
 var q = newQueue(maxConcurrent)
 
 type promptRequest struct {
@@ -17,29 +15,34 @@ type promptRequest struct {
 }
 
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+	requestId := r.Header.Get("X-Request-ID")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		msg := "Streaming not supported by connection"
+		//lint:ignore ST1005 serving error to frontend
+		logWriteErr(w, requestId, fmt.Errorf(msg), msg, http.StatusInternalServerError)
 		return
 	}
 
-	var p promptRequest
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	p := promptRequest{}
 	err := json.NewDecoder(r.Body).Decode(&p)
 	if err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		logWriteErr(w, requestId, err, "Invalid JSON object as input", http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
 
-	done := r.Context().Done()
 	id := r.Context().Value(contextSubKey).(string)
+	done := r.Context().Done()
 
 	if !q.wait(id, done) {
-		http.Error(w, "Can only access LLM once at a time", http.StatusConflict)
+		logWriteErr(w, requestId, err, "Can only access LLM once at a time", http.StatusInternalServerError)
 		return
 	}
 	defer q.release(id)
@@ -49,7 +52,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := prompt(p)
 	if err != nil {
-		http.Error(w, "Failed to prompt LLM", http.StatusInternalServerError)
+		logWriteErr(w, requestId, err, "Failed to prompt LLM", http.StatusInternalServerError)
 		return
 	}
 
@@ -61,9 +64,10 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, token)
 			flusher.Flush()
 		case err := <-errCh:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logWriteErr(w, requestId, err, err.Error(), http.StatusInternalServerError)
 			return
 		case <-done:
+			fmt.Println("done")
 			return
 		}
 	}
@@ -116,7 +120,7 @@ func prompt(p promptRequest) (*http.Response, error) {
 	client := &http.Client{}
 
 	resp, err := client.Do(req)
-	if err != nil && err.Error() != eofError {
+	if err != nil {
 		return nil, err
 	}
 
