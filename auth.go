@@ -54,7 +54,7 @@ func auth(token string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	auth, ok := md["beta"].(bool)
+	beta, ok := md["beta"].(bool)
 	if !ok {
 		return "", false
 	}
@@ -62,5 +62,5 @@ func auth(token string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return sub, auth
+	return sub, beta
 }

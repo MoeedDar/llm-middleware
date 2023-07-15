@@ -65,7 +65,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		case err := <-errCh:
 			if err != nil {
-				logWriteErr(w, requestId, err, err.Error(), http.StatusInternalServerError)
+				logWriteErr(w, requestId, err, "Failed to retrieve token from LLM", http.StatusInternalServerError)
 			}
 			return
 		case <-done:
@@ -91,7 +91,7 @@ func generate(resp *http.Response, tokens chan<- string, done <-chan struct{}, e
 			_, err := resp.Body.Read(data)
 			if err != nil {
 				//lint:ignore ST1005 serving error to frontend
-				errCh <- fmt.Errorf("Failed to retrieve token from LLM")
+				errCh <- err
 				return
 			}
 			select {
