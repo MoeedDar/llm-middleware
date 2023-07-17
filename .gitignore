@@ -23,3 +23,5 @@ fly.toml
 
 # Go workspace file
 go.work
+
+replicas.json

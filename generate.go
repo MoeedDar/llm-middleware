@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -56,7 +55,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go generate(resp, tokens, r.Context().Done(), errCh)
+	go generate(resp, tokens, done, errCh)
 
 	for {
 		select {
@@ -69,7 +68,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		case <-done:
-			fmt.Println("done")
 			return
 		}
 	}
@@ -90,7 +88,6 @@ func generate(resp *http.Response, tokens chan<- string, done <-chan struct{}, e
 			data := make([]byte, 1024)
 			_, err := resp.Body.Read(data)
 			if err != nil {
-				//lint:ignore ST1005 serving error to frontend
 				errCh <- err
 				return
 			}
@@ -105,12 +102,7 @@ func generate(resp *http.Response, tokens chan<- string, done <-chan struct{}, e
 }
 
 func prompt(p promptRequest) (*http.Response, error) {
-	data, err := json.Marshal(p)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", llmHost, bytes.NewBuffer(data))
+	req, err := repMan.newRequest("/generate", "POST", p)
 	if err != nil {
 		return nil, err
 	}
