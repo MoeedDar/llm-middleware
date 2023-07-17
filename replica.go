@@ -127,7 +127,7 @@ func (r *replicaManager) skip() {
 	defer r.mu.Unlock()
 	r.iter = 0
 	r.pointer++
-	if r.pointer > uint(len(r.replicas)) {
+	if r.pointer >= uint(len(r.replicas)) {
 		r.pointer = 0
 	}
 }
