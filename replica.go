@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -78,8 +79,14 @@ func (r *replicaManager) loadReplicas(path string) error {
 
 func (r *replicaManager) newRequest(path string, method string, body any) (*http.Request, error) {
 	r.next()
+	retries := 0
 	for !r.current().ping() {
 		r.skip()
+		retries++
+		if retries > 10 {
+			//lint:ignore ST1005 serving error to frontend
+			return nil, fmt.Errorf("Failed to access LLM, max retries reached")
+		}
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -110,7 +117,7 @@ func (r *replicaManager) next() {
 		r.iter = 0
 		r.pointer++
 	}
-	if r.pointer > uint(len(r.replicas)) {
+	if r.pointer >= uint(len(r.replicas)) {
 		r.pointer = 0
 	}
 }
