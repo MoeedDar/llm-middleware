@@ -12,7 +12,10 @@ import (
 var q = newQueue(maxConcurrent)
 
 type promptRequest struct {
-	Prompt string `json:"prompt"`
+	Prompt    string `json:"prompt"`
+	MaxTokens string `json:"max_tokens"`
+	TopK      string `json:"top_k"`
+	TopP      string `json:"top_p"`
 }
 
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
