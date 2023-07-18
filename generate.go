@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 var q = newQueue(maxConcurrent)
@@ -15,6 +17,10 @@ type promptRequest struct {
 
 func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	requestId := r.Header.Get("X-Request-ID")
+
+	timer := time.Now()
+	log.Info().Str("request_id", requestId).Msg("Initialising generate request")
+	defer log.Info().Str("request_id", requestId).TimeDiff("Time elapsed", time.Now(), timer).Msg("Finishing request")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -39,12 +45,14 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	id := r.Context().Value(contextSubKey).(string)
 	done := r.Context().Done()
-
+	log.Info().Str("request_id", requestId).Msg("Entering queue")
+	queueTimer := time.Now()
 	if !q.wait(id, done) {
 		logWriteErr(w, requestId, err, "Can only access LLM once at a time", http.StatusInternalServerError)
 		return
 	}
 	defer q.release(id)
+	log.Info().Str("request_id", requestId).TimeDiff("Time elapsed", time.Now(), queueTimer).Msg("Exiting queue")
 
 	tokens := make(chan string)
 	errCh := make(chan error)
@@ -55,6 +63,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Info().Str("request_id", requestId).Msg("Beginning generation")
 	go generate(resp, tokens, done, errCh)
 
 	for {
